@@ -11,10 +11,10 @@ final int CELL = 5;
 final int COLS = LAND_W / CELL;
 final int ROWS = LAND_H / CELL;
 
-int NUM_ANTS = 60;
+int NUM_ANTS = 300;
 float ALPHA = 0.5;
-float BETA = 1.0;
-float RHO = 0.05;
+float BETA = 0.5;
+float RHO = 0.03;
 float Q = 5.0;
 float MAX_PHER = 8.0;
 float MIN_PHER = 0.01;
@@ -30,11 +30,11 @@ float[][] fitMap;
 int[] bgPixels;
 float minFit, maxFit;
 
-int NUM_VALLEYS = 6;
-float[] vcx = {150, 450, 850, 220, 750, 480};
-float[] vcy = {150, 100, 320, 550, 650, 400};
-float[] vdep = {0.9, 0.75, 0.85, 0.7, 0.8, 0.65};
-float[] vwid = {95, 100, 85, 90, 90, 75};
+int NUM_VALLEYS = 12;
+float[] vcx = {120, 380, 850, 920, 220, 750, 480, 650, 180, 560, 890, 340};
+float[] vcy = {140, 100, 280, 120, 580, 680, 420, 550, 360, 210, 620, 700};
+float[] vdep = {0.85, 0.70, 0.75, 0.65, 0.80, 0.90, 0.75, 0.70, 0.65, 0.80, 0.85, 0.95};
+float[] vwid = {90, 85, 95, 75, 100, 105, 80, 85, 70, 95, 90, 110};
 
 final int HIST_LEN = 400;
 float[] histBest = new float[HIST_LEN];
@@ -429,6 +429,11 @@ void keyPressed() {
       NUM_ANTS = max(10, NUM_ANTS - 10);
       initPheromone();
       initAnts();
+      break;
+    case 's':
+    case 'S':
+      saveFrame("../../screenshot.png");
+      println("Screenshot saved to root directory.");
       break;
   }
 }
