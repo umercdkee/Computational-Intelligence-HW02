@@ -1,6 +1,7 @@
 import xml.etree.ElementTree as ET
 import math
 import random
+import matplotlib.pyplot as plt
 
 #code to read data from file
 def read_file(filepath):
@@ -36,10 +37,8 @@ def read_file(filepath):
         'requests': requests,
     }
 
-
 #using coordinates to calculate distance between each node
 def build_distance_matrix(nodes):
-
     distances = {}
     ids = list(nodes.keys())
     for i in ids:
@@ -52,7 +51,6 @@ def build_distance_matrix(nodes):
                 distances[(i, j)] = math.sqrt(dx * dx + dy * dy)
     return distances #dictionary storing distance between node i and node j
 
-
 #initializing pheronome and visibility matrices for each edge using distances calculated above
 def initialise_matrices(node_ids, distances, tau0):
     tau = {}
@@ -64,18 +62,16 @@ def initialise_matrices(node_ids, distances, tau0):
                 eta[(i, j)] = 0.0
             else:
                 tau[(i, j)] = tau0 #setting initial tau values to an arbitrary small constant
-                eta[(i, j)] = 1.0 / distances[(i, j)] #eta formula
+                eta[(i, j)] = 1.0 / distances[(i, j)]
     return tau, eta
-
 
 #function to update transition probabilities for all nodes
 def transition_probabilities(current, allowed, tau, eta, alpha, beta):
-
     numerators = {}
     for j in allowed: #updating probabilities for all customers that the truck is allowed to visit
         t = tau[(current, j)] ** alpha
         e = eta[(current, j)] ** beta
-        numerators[j] = t * e 
+        numerators[j] = t * e
 
     total = sum(numerators.values())
 
@@ -84,7 +80,6 @@ def transition_probabilities(current, allowed, tau, eta, alpha, beta):
         return [(j, prob) for j in allowed]
 
     return [(j, numerators[j] / total) for j in allowed]
-
 
 #using roulette wheel scheme to construct ants based on transition probabilities
 #random number generated and probabilities for each customer summed up until they are greater than or equal to the random number
@@ -97,20 +92,18 @@ def roulette_select(probabilities):
             return city
     return probabilities[-1][0]
 
-
 #constructing one full ant
 def build_solution(depot, customers, demands, capacity,
                    tau, eta, alpha, beta):
-
-    unvisited = set(customers)   #tabu list of customers not yet visited by ant
-    routes          = []
-    loads           = []
+    unvisited = set(customers)
+    routes    = []
+    loads     = []
 
     while unvisited:
         #initializing a new truck route from the depot
-        current_node  = depot
-        route_load    = 0.0
-        route_stops   = []
+        current_node = depot
+        route_load   = 0.0
+        route_stops  = []
 
         while True:
             #customers that still fit in this truck
@@ -118,27 +111,24 @@ def build_solution(depot, customers, demands, capacity,
                 c for c in unvisited
                 if route_load + demands[c] <= capacity
             ]
-
             if not allowed:
-                break   #truck is full or no allowed customer left
-
+                break #truck is full or no allowed customer left
+            
             #computing transition probabilities and picking next stop
-            probs       = transition_probabilities(current_node, allowed,
-                                                   tau, eta, alpha, beta)
-            next_node   = roulette_select(probs)
+            probs     = transition_probabilities(current_node, allowed,
+                                                 tau, eta, alpha, beta)
+            next_node = roulette_select(probs)
 
-            #updating truck route and relevant variables  
+            #updating truck route and relevant variables 
             route_stops.append(next_node)
             route_load  += demands[next_node]
             unvisited.discard(next_node)
             current_node = next_node
-        
         #updating ant
         routes.append(route_stops)
         loads.append(route_load)
 
     return routes, loads
-
 
 #calculating fitness of each ant. fitness function is being minimized here
 def solution_distance(routes, depot, distances):
@@ -148,36 +138,34 @@ def solution_distance(routes, depot, distances):
             continue
         prev = depot #initial point
         for node in route: #summing all distances
-            total += distances[(prev, node)]
+            total += distances[(prev, node)] 
             prev = node
-        total += distances[(prev, depot)]   #distance to return to depot
+        total += distances[(prev, depot)] #distance to return to depot
     return total
-
 
 #updating pheromones for all edges
 def update_pheromones(tau, all_solutions, node_ids, depot, distances, rho, Q):
-
     delta_tau = {(i, j): 0.0 for i in node_ids for j in node_ids} #matrix to store pheronome deposits
 
     for routes, total_dist in all_solutions:
         if total_dist == 0:
             continue
-        deposit = Q / total_dist #total deposit of each ant 
+        deposit = Q / total_dist
 
         for route in routes: #spreading deposit of each ant over all its routes
             if not route: #skipping trucks without routes
                 continue
             path = [depot] + route + [depot] #adding depot to start and end of route
-            for k in range(len(path) - 1): 
+            for k in range(len(path) - 1):
                 i, j = path[k], path[k + 1]
                 delta_tau[(i, j)] += deposit
-                delta_tau[(j, i)] += deposit   #updating the matrix to store pheronome deposits for each edge
-    
+                delta_tau[(j, i)] += deposit #updating the matrix to store pheronome deposits for each edge
+
     for i in node_ids:
         for j in node_ids:
             #evaporating old pheronome and adding new deposits
             if i != j:
-                tau[(i, j)] = rho * tau[(i, j)] + delta_tau[(i, j)]
+                tau[(i, j)] = (1 - rho) * tau[(i, j)] + delta_tau[(i, j)]
 
     return tau
 
@@ -185,19 +173,18 @@ def update_pheromones(tau, all_solutions, node_ids, depot, distances, rho, Q):
 def format_route(depot, route, demands, distances):
     if not route:
         return "  (empty route)"
-    path       = [depot] + route + [depot]
-    dist       = sum(distances[(path[k], path[k+1])] for k in range(len(path)-1))
-    load       = sum(demands[c] for c in route)
-    stops_str  = " → ".join(str(n) for n in path)
+    path      = [depot] + route + [depot]
+    dist      = sum(distances[(path[k], path[k + 1])] for k in range(len(path) - 1))
+    load      = sum(demands[c] for c in route)
+    stops_str = " → ".join(str(n) for n in path)
     return f"  {stops_str}   [load={load:.0f}, dist={dist:.2f}]"
 
 #another helper function to print things tameez se
-def print_solution(routes, depot, demands, distances, label = "Solution"):
+def print_solution(routes, depot, demands, distances, label="Solution"):
     total = solution_distance(routes, depot, distances)
     print(f"\n  {label}  |  Vehicles used: {len(routes)}  |  Total distance: {total:.2f}")
     for idx, route in enumerate(routes):
-        print(f"    Vehicle {idx+1}: {format_route(depot, route, demands, distances)}")
-
+        print(f"    Vehicle {idx + 1}: {format_route(depot, route, demands, distances)}")
 
 
 def run_aco(data,
@@ -212,16 +199,18 @@ def run_aco(data,
 
     nodes     = data['nodes']
     depot     = data['depot']
-    demands   = data['requests']        
+    demands   = data['requests']
     capacity  = data['capacity']
     customers = [nid for nid in nodes if nid != depot]
 
-    distances         = build_distance_matrix(nodes)
-    node_ids          = list(nodes.keys())
-    tau, eta          = initialise_matrices(node_ids, distances, tau0)
+    distances = build_distance_matrix(nodes)
+    node_ids  = list(nodes.keys())
+    tau, eta  = initialise_matrices(node_ids, distances, tau0)
 
     best_routes  = None
     best_dist    = math.inf
+    best_history = []
+    avg_history  = []
 
     if verbose:
         print("=" * 65)
@@ -238,12 +227,10 @@ def run_aco(data,
         print(f"  Q           : {Q}")
         print(f"  Iterations  : {num_iterations}")
 
-    #main
     for iteration in range(1, num_iterations + 1):
 
         all_solutions = []
 
-        #each ant being constructed
         for _ in range(num_ants):
             routes, loads = build_solution(
                 depot, customers, demands, capacity,
@@ -254,152 +241,102 @@ def run_aco(data,
 
             if dist < best_dist:
                 best_dist   = dist
-                best_routes = [r[:] for r in routes]   #deep copy of the best routes
+                best_routes = [r[:] for r in routes]
 
-        #updating pheromones
         tau = update_pheromones(
             tau, all_solutions, node_ids, depot, distances, rho, Q
         )
 
-        #logging results
+        iter_dists = [d for _, d in all_solutions]
+        best_history.append(best_dist)
+        avg_history.append(sum(iter_dists) / len(iter_dists))
+
         if verbose:
-            iter_best_dist   = min(d for _, d in all_solutions)
-            iter_best_routes = next(r for r, d in all_solutions
-                                    if d == iter_best_dist)
-            improved = "  ← NEW BEST" if iter_best_dist < best_dist + 1e-9 \
-                                         and iter_best_dist == best_dist else ""
+            iter_best_dist = min(iter_dists)
+            improved = "  ← NEW BEST" if iter_best_dist == best_dist else ""
             print(f"\n{'─'*65}")
             print(f"  Iteration {iteration:>3}  |  "
                   f"Iter best: {iter_best_dist:.2f}  |  "
                   f"Global best: {best_dist:.2f}{improved}")
 
-    #final results
-    print("\n" + "=" * 65)
-    print("  FINAL RESULT")
-    print("=" * 65)
-    print_solution(best_routes, depot, demands, distances,
-                   label="Best solution found")
-    print("=" * 65)
+    if verbose:
+        print("\n" + "=" * 65)
+        print("  FINAL RESULT")
+        print("=" * 65)
+        print_solution(best_routes, depot, demands, distances,
+                       label="Best solution found")
+        print("=" * 65)
 
-    return best_routes, best_dist
+    return best_routes, best_dist, best_history, avg_history
 
 
-def run_grid_search(data, param_grid, num_iterations=100, tau0=0.01, seed=42):
-    """
-    Runs run_aco() varying one parameter at a time from a baseline.
-    The first value in each param_grid list is the baseline value.
+def run_single_config(data, alpha, beta, rho, num_ants, num_iterations=100, tau0=0.01, Q=100.0, seed=42):
+    print("=" * 75)
+    print("  SINGLE PARAMETER RUN")
+    print("=" * 75)
+    print(f"  alpha={alpha}  beta={beta}  rho={rho}  ants={num_ants}")
+    print(f"  Iterations: {num_iterations}")
+    print("=" * 75)
 
-    param_grid keys: alpha, beta, rho, num_ants
+    random.seed(seed)
 
-    Prints a ranked summary table at the end.
-    Returns a list of result dicts sorted best -> worst.
-    """
-    baseline = {
-        'alpha':    param_grid['alpha'][0],
-        'beta':     param_grid['beta'][0],
-        'rho':      param_grid['rho'][0],
-        'num_ants': param_grid['num_ants'][0],
+    _, best_dist, best_history, avg_history = run_aco(
+        data,
+        num_ants       = num_ants,
+        alpha          = alpha,
+        beta           = beta,
+        rho            = rho,
+        Q              = Q,
+        num_iterations = num_iterations,
+        tau0           = tau0,
+        verbose        = False,
+    )
+
+    print(f"  Best distance: {best_dist:.2f}")
+    print("=" * 75)
+
+    iterations = range(1, num_iterations + 1)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+    fig.suptitle(f"ACO  |  alpha={alpha}  beta={beta}  rho={rho}  ants={num_ants}")
+
+    ax1.plot(iterations, best_history, color='steelblue')
+    ax1.set_title("Best Fitness So Far")
+    ax1.set_xlabel("Iteration")
+    ax1.set_ylabel("Distance")
+    ax1.grid(True, linestyle='--', alpha=0.5)
+
+    ax2.plot(iterations, avg_history, color='darkorange')
+    ax2.set_title("Avg Fitness Per Iteration")
+    ax2.set_xlabel("Iteration")
+    ax2.set_ylabel("Distance")
+    ax2.grid(True, linestyle='--', alpha=0.5)
+
+    plt.tight_layout()
+    plt.show()
+
+    return {
+        'alpha':     alpha,
+        'beta':      beta,
+        'rho':       rho,
+        'num_ants':  num_ants,
+        'best_dist': best_dist,
     }
 
-    # Build configs: baseline + one-at-a-time variations
-    configs = [dict(baseline)]
-    for param, values in param_grid.items():
-        for val in values[1:]:
-            cfg = dict(baseline)
-            cfg[param] = val
-            if cfg not in configs:
-                configs.append(cfg)
-
-    total   = len(configs)
-    results = []
-
-    print("=" * 75)
-    print("  PARAMETER GRID SEARCH")
-    print("=" * 75)
-    print(f"  Baseline  ->  alpha={baseline['alpha']}  beta={baseline['beta']}  "
-          f"rho={baseline['rho']}  ants={baseline['num_ants']}")
-    print(f"  Varying one parameter at a time")
-    print(f"  Iterations per run  : {num_iterations}")
-    print(f"  Total configurations: {total}")
-
-    for run_idx, cfg in enumerate(configs, start=1):
-        alpha    = cfg['alpha']
-        beta     = cfg['beta']
-        rho      = cfg['rho']
-        num_ants = cfg['num_ants']
-
-        changed = [p for p in baseline if cfg[p] != baseline[p]]
-        tag = "BASELINE" if not changed else f"vary {', '.join(changed)}"
-
-        print(f"\n{'─'*75}")
-        print(f"  Run {run_idx}/{total}  [{tag}]  "
-              f"alpha={alpha}  beta={beta}  rho={rho}  ants={num_ants}")
-        print(f"{'─'*75}")
-
-        random.seed(seed)
-
-        _, best_dist = run_aco(
-            data,
-            num_ants       = num_ants,
-            alpha          = alpha,
-            beta           = beta,
-            rho            = rho,
-            Q              = 100.0,
-            num_iterations = num_iterations,
-            tau0           = tau0,
-            verbose        = False,
-        )
-        results.append({
-            'run':       run_idx,
-            'tag':       tag,
-            'alpha':     alpha,
-            'beta':      beta,
-            'rho':       rho,
-            'num_ants':  num_ants,
-            'best_dist': best_dist,
-        })
-
-        print(f"  Best distance: {best_dist:.2f}")
-
-    # Summary table ranked best -> worst
-    results.sort(key=lambda x: x['best_dist'])
-
-    print("\n" + "=" * 75)
-    print("  RESULTS SUMMARY  (ranked best -> worst)")
-    print("=" * 75)
-    print(f"  {'Rank':<5} {'alpha':<7} {'beta':<6} {'rho':<6} {'Ants':<6} "
-          f"{'Best Dist':<12}")
-    print("  " + "-" * 71)
-    for rank, r in enumerate(results, start=1):
-        marker = "  <- BEST"  if rank == 1            else ""
-        marker = "  <- WORST" if rank == len(results) else marker
-        print(f"  {rank:<5} {r['alpha']:<7} {r['beta']:<6} {r['rho']:<6} "
-              f"{r['num_ants']:<6} {r['best_dist']:<12.2f}  "
-              f"{r['tag']}{marker}")
-    print("=" * 75)
-
-    return results
 
 if __name__ == "__main__":
     import sys
 
-    filepath = sys.argv[1] if len(sys.argv) > 1 else "test_instances/A-n32-k05.xml"
+    filepath = sys.argv[1] 
 
     data = read_file(filepath)
 
-    #first value in each list is the baseline.
-    #all other values are tested one at a time while the rest stay at baseline.
-    param_grid = {
-        'alpha':    [2,   1,   3,   5, 2  ],
-        'beta':     [2,   1,   3,   5, 2 ],
-        'rho':      [0.5, 0.2, 0.7, 0.9, 0.7],
-        'num_ants': [10,  20,  40,  80, 40 ],
-    }
-
-    run_grid_search(
+    result = run_single_config(
         data,
-        param_grid     = param_grid,
-        num_iterations = 100,
+        alpha          = 3,
+        beta           = 2,
+        rho            = 0.4,
+        num_ants       = 60,
+        num_iterations = 75,
         tau0           = 0.01,
-        seed           = 42,
+        seed           = 32,
     )
